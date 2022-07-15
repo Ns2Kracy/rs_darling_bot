@@ -6,3 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
+#异步库
+tokio = { version = "1", features = ["full"] }
+# websocket 依赖
+tokio-tungstenite = "0.17.1"
+# tokio-tungstenite 的依赖
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+#简单化处理异常
+anyhow = "1.0.57"
