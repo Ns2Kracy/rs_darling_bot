@@ -1,3 +1,6 @@
+use anyhow::{Error, Result};
+use futures_util::stream::Next;
+use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -6,13 +9,10 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use anyhow::{Error, Result};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
-use futures_util::{SinkExt, StreamExt, TryStreamExt};
-use futures_util::stream::Next;
-use tokio::sync::mpsc::{Receiver, Sender, UnboundedSender};
 
 type Bots = HashMap<String, Arc<RefCell<Bot>>>;
 type Handle = fn(CQMessage, &mut Bot) -> Result<()>;
@@ -50,7 +50,7 @@ pub struct CQMessage {}
 
 pub struct RecMessage {
     addr: String,
-    msg: Message
+    msg: Message,
 }
 
 impl BotBuilder {
@@ -62,7 +62,7 @@ impl BotBuilder {
         self.bots.remove(key);
     }
 
-    fn get_bot(&self, key: &str) -> Option<&Arc<RefCell<Bot>>>{
+    fn get_bot(&self, key: &str) -> Option<&Arc<RefCell<Bot>>> {
         self.bots.get(key)
     }
 
@@ -70,8 +70,8 @@ impl BotBuilder {
         self.handle_vec.take()
     }
 }
-unsafe impl Send for BotBuilder{}
-unsafe impl Sync for BotBuilder{}
+unsafe impl Send for BotBuilder {}
+unsafe impl Sync for BotBuilder {}
 
 impl BotBuilder {
     pub fn new() -> Self {
@@ -148,21 +148,32 @@ impl BotBuilder {
         loop {
             let addr_send = bot_in.clone();
             if let Ok((tcp_stream, addr)) = socket.accept().await {
-                let (bot_receiver_in, mut bot_receiver_out) = tokio::sync::mpsc::channel::<RecMessage>(5);
+                let (bot_receiver_in, mut bot_receiver_out) =
+                    tokio::sync::mpsc::channel::<RecMessage>(5);
                 let (bot_sender_in, mut bot_sender_out) = tokio::sync::mpsc::channel::<Message>(5);
                 let addr_str = addr.to_string();
-                let bot = Bot{
-                    addr:Some(addr),
+                let bot = Bot {
+                    addr: Some(addr),
                     msg_sender: Some(bot_sender_in),
                     msg_receiver: Some(bot_receiver_out),
-                    handle_vec: None
+                    handle_vec: None,
                 };
                 addr_send.send(bot).await;
-                tokio::spawn(BotBuilder::start_ws_listener(tcp_stream, addr_str, bot_receiver_in.clone(), bot_sender_out));
+                tokio::spawn(BotBuilder::start_ws_listener(
+                    tcp_stream,
+                    addr_str,
+                    bot_receiver_in.clone(),
+                    bot_sender_out,
+                ));
             }
         }
     }
-    async fn start_ws_listener(tcp_stream: TcpStream, addr: String, mut msg_receive: Sender<RecMessage>, mut msg_sende: Receiver<Message>) {
+    async fn start_ws_listener(
+        tcp_stream: TcpStream,
+        addr: String,
+        mut msg_receive: Sender<RecMessage>,
+        mut msg_sende: Receiver<Message>,
+    ) {
         let ws_stream = tokio_tungstenite::accept_async(tcp_stream)
             .await
             .expect("not websocket");
@@ -206,6 +217,6 @@ impl Bot {
         Message::Text("".to_string())
     }
     fn message2cq(msg: Message) -> CQMessage {
-        CQMessage{}
+        CQMessage {}
     }
 }
